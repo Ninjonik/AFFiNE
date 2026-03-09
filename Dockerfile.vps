@@ -25,7 +25,7 @@ RUN node -e " \
   delete pkg.devDependencies; \
   delete pkg.scripts; \
   require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));" && \
-  npm install --production --ignore-scripts && \
+  npm install --production --ignore-scripts --legacy-peer-deps && \
   npx prisma generate
 
 RUN AFFINE_DOCKER_CLEAN=1 TARGETARCH="${TARGETARCH}" TARGETVARIANT="${TARGETVARIANT}" node ./scripts/docker-clean.mjs
