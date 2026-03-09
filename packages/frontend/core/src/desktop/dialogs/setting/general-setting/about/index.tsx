@@ -172,6 +172,24 @@ export const AboutAffine = () => {
           {t['com.affine.aboutAFFiNE.legal.tos']()}
           <OpenInNewIcon className="icon" />
         </a>
+        <a
+          className={styles.link}
+          rel="noreferrer"
+          href="https://legal.igportals.eu"
+          target="_blank"
+        >
+          TOS1
+          <OpenInNewIcon className="icon" />
+        </a>
+        <a
+          className={styles.link}
+          rel="noreferrer"
+          href="https://legal.nulledtech.eu"
+          target="_blank"
+        >
+          TOS2
+          <OpenInNewIcon className="icon" />
+        </a>
       </SettingWrapper>
     </>
   );

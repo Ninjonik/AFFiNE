@@ -183,8 +183,8 @@ export const SignInStep = ({
               {/*prettier-ignore*/}
               <Trans i18nKey="com.affine.auth.sign.message">
                 By clicking &quot;Continue with Google/Email&quot; above, you acknowledge that
-                you agree to AFFiNE&apos;s <a href="https://affine.pro/terms" target="_blank" rel="noreferrer">Terms of Conditions</a> and <a href="https://affine.pro/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.
-            </Trans>
+                you agree to <a href="https://legal.igportals.eu" target="_blank" rel="noopener noreferrer">TOS1</a> and <a href="https://legal.nulledtech.eu" target="_blank" rel="noopener noreferrer">TOS2</a>.
+              </Trans>
             </div>
             <div className={style.skipDivider}>
               <div className={style.skipDividerLine} />

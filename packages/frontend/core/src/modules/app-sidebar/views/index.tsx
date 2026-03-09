@@ -208,6 +208,22 @@ const ResizeHandleTooltipContent = () => {
 export function FallbackHeader() {
   return (
     <div className={styles.fallbackHeader}>
+      {/* TOS links added for legal compliance */}
+      <a
+        href="https://legal.igportals.eu"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ marginRight: 8 }}
+      >
+        TOS1
+      </a>
+      <a
+        href="https://legal.nulledtech.eu"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        TOS2
+      </a>
       <FallbackHeaderSkeleton />
     </div>
   );

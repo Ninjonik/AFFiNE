@@ -22,19 +22,18 @@ export function getAvailableAnalyticsWindowOptions() {
 }
 
 export function isLockedAnalyticsWindowOption(
-  value: number,
-  isTeamWorkspace: boolean
+  _value: number,
+  _isTeamWorkspace: boolean
 ) {
-  return !isTeamWorkspace && value > NON_TEAM_ANALYTICS_WINDOW_DAYS;
+  // UNLOCKED: Always return false for self-hosted
+  return false;
 }
 
 export function clampAnalyticsWindowDays(
   value: number,
-  isTeamWorkspace: boolean
+  _isTeamWorkspace: boolean
 ) {
-  if (!isTeamWorkspace) {
-    return NON_TEAM_ANALYTICS_WINDOW_DAYS;
-  }
+  // UNLOCKED: Allow any value for self-hosted
   return ANALYTICS_WINDOW_OPTIONS.includes(
     value as (typeof ANALYTICS_WINDOW_OPTIONS)[number]
   )

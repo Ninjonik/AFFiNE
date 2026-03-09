@@ -111,7 +111,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@affine-tools/cli@workspace:*, @affine-tools/cli@workspace:tools/cli":
+"@affine-tools/cli@workspace:*, @affine-tools/cli@workspace:^, @affine-tools/cli@workspace:tools/cli":
   version: 0.0.0-use.local
   resolution: "@affine-tools/cli@workspace:tools/cli"
   dependencies:
@@ -793,7 +793,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@affine/monorepo@workspace:."
   dependencies:
-    "@affine-tools/cli": "workspace:*"
+    "@affine-tools/cli": "workspace:^"
     "@capacitor/cli": "npm:^7.0.0"
     "@eslint/js": "npm:^9.39.2"
     "@faker-js/faker": "npm:^10.1.0"

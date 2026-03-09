@@ -1,8 +1,6 @@
 use affine_common::{doc_loader::Doc, napi_utils::map_napi_err};
-use napi::{
-  Env, Result, Status, Task,
-  bindgen_prelude::{AsyncTask, Buffer},
-};
+use napi::{Result, Status, bindgen_prelude::Buffer};
+use napi_derive::napi;
 
 #[napi(object)]
 pub struct Chunk {
@@ -16,59 +14,23 @@ pub struct ParsedDoc {
   pub chunks: Vec<Chunk>,
 }
 
-pub struct Document {
-  inner: Doc,
-}
-
-impl Document {
-  fn name(&self) -> String {
-    self.inner.name.clone()
-  }
-
-  fn chunks(&self) -> Vec<Chunk> {
-    self
-      .inner
-      .chunks
-      .iter()
-      .enumerate()
-      .map(|(i, chunk)| {
-        let content = crate::utils::clean_content(&chunk.content);
-        Chunk {
-          index: i as i64,
-          content,
-        }
-      })
-      .collect::<Vec<Chunk>>()
-  }
-}
-
-pub struct AsyncParseDocResponse {
-  file_path: String,
-  doc: Vec<u8>,
-}
-
 #[napi]
-impl Task for AsyncParseDocResponse {
-  type Output = Document;
-  type JsValue = ParsedDoc;
-
-  fn compute(&mut self) -> Result<Self::Output> {
-    let doc = map_napi_err(Doc::new(&self.file_path, &self.doc), Status::GenericFailure)?;
-    Ok(Document { inner: doc })
-  }
-
-  fn resolve(&mut self, _: Env, doc: Document) -> Result<Self::JsValue> {
-    Ok(ParsedDoc {
-      name: doc.name(),
-      chunks: doc.chunks(),
+pub fn parse_doc(file_path: String, doc: Buffer) -> Result<ParsedDoc> {
+  let inner = map_napi_err(Doc::new(&file_path, &doc), Status::GenericFailure)?;
+  let chunks = inner
+    .chunks
+    .iter()
+    .enumerate()
+    .map(|(i, chunk)| {
+      let content = crate::utils::clean_content(&chunk.content);
+      Chunk {
+        index: i as i64,
+        content,
+      }
     })
-  }
-}
-
-#[napi]
-pub fn parse_doc(file_path: String, doc: Buffer) -> AsyncTask<AsyncParseDocResponse> {
-  AsyncTask::new(AsyncParseDocResponse {
-    file_path,
-    doc: doc.to_vec(),
+    .collect::<Vec<Chunk>>();
+  Ok(ParsedDoc {
+    name: inner.name.clone(),
+    chunks,
   })
 }
