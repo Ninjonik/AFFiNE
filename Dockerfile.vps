@@ -1,5 +1,13 @@
 # syntax=docker/dockerfile:1.7
 
+# Extract only package.json files from workspace packages.
+# We need these to resolve npm dependencies of workspace:* packages.
+FROM node:22-bookworm-slim AS workspace-deps
+WORKDIR /ws
+COPY ./packages ./packages
+RUN find /ws/packages -type f ! -name 'package.json' -delete 2>/dev/null; \
+    find /ws/packages -type d -empty -delete 2>/dev/null; true
+
 FROM node:22-bookworm-slim AS assets
 WORKDIR /app
 
@@ -8,25 +16,59 @@ COPY ./packages/frontend/apps/web/dist /app/static
 COPY ./packages/frontend/admin/dist /app/static/admin
 COPY ./packages/frontend/apps/mobile/dist /app/static/mobile
 
+# Bring in just the workspace package.json files
+COPY --from=workspace-deps /ws/packages /tmp/packages
+
 ARG TARGETARCH
 ARG TARGETVARIANT
 RUN apt-get update && \
   apt-get install -y --no-install-recommends openssl ca-certificates && \
   rm -rf /var/lib/apt/lists/*
 
-# Install ALL production dependencies from server's package.json
-# This is needed because Yarn 4 hoists deps to root node_modules,
-# so packages/backend/server/node_modules is nearly empty.
-# We remove workspace: dependencies first since they don't exist on npm.
+# Install production dependencies.
+# Workspace packages (workspace:*) don't exist on npm, but the bundler inlines
+# their code into dist/main.js while leaving their own npm deps as external
+# imports.  We scan every workspace package the server depends on, collect
+# their non-workspace npm dependencies, merge them into the server's
+# package.json, and then run a single npm install.
 RUN node -e " \
-  const pkg = JSON.parse(require('fs').readFileSync('package.json','utf8')); \
+  const fs = require('fs'); \
+  const path = require('path'); \
+  const pkg = JSON.parse(fs.readFileSync('package.json','utf8')); \
   const deps = pkg.dependencies || {}; \
-  for (const [k,v] of Object.entries(deps)) { if (v.startsWith('workspace:')) delete deps[k]; } \
+  \
+  /* Build a map: workspace package name -> package.json path */ \
+  const wsMap = {}; \
+  const walk = (dir) => { \
+    for (const entry of fs.readdirSync(dir, {withFileTypes:true})) { \
+      if (entry.name === 'node_modules') continue; \
+      const full = path.join(dir, entry.name); \
+      if (entry.isDirectory()) walk(full); \
+      else if (entry.name === 'package.json') { \
+        try { const p = JSON.parse(fs.readFileSync(full,'utf8')); if (p.name) wsMap[p.name] = full; } catch {} \
+      } \
+    } \
+  }; \
+  walk('/tmp/packages'); \
+  \
+  /* For every workspace: dep, pull in its npm (non-workspace) dependencies */ \
+  for (const [name, ver] of Object.entries(deps)) { \
+    if (!ver.startsWith('workspace:')) continue; \
+    const pkgPath = wsMap[name]; \
+    if (pkgPath) { \
+      const wsPkg = JSON.parse(fs.readFileSync(pkgPath,'utf8')); \
+      for (const [d,v] of Object.entries(wsPkg.dependencies || {})) { \
+        if (!v.startsWith('workspace:') && !deps[d]) deps[d] = v; \
+      } \
+    } \
+    delete deps[name]; \
+  } \
+  \
   delete pkg.devDependencies; \
   delete pkg.scripts; \
-  require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));" && \
+  fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));" && \
+  rm -rf /tmp/packages && \
   npm install --production --ignore-scripts --legacy-peer-deps && \
-  npm install --no-save --ignore-scripts --legacy-peer-deps aws4 && \
   npx prisma generate
 
 RUN AFFINE_DOCKER_CLEAN=1 TARGETARCH="${TARGETARCH}" TARGETVARIANT="${TARGETVARIANT}" node ./scripts/docker-clean.mjs
