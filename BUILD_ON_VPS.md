@@ -78,15 +78,11 @@ yarn affine build -p web --deps --wait-deps
 # Build admin frontend (optional - for admin panel)
 yarn affine build -p admin --deps --wait-deps
 
-# Skip mobile build (not needed for self-hosted) - create dummy dist
-mkdir -p packages/frontend/apps/mobile/dist
-touch packages/frontend/apps/mobile/dist/.gitkeep
-
 # Build backend server (required)
 yarn affine build -p server --deps --wait-deps
 ```
 
-**Note:** Mobile frontend has build issues and isn't needed for self-hosted web access. We create an empty dist folder to satisfy Docker.
+**Note:** Mobile frontend is not built or copied by `Dockerfile.vps`, so no dummy `mobile/dist` folder is needed.
 
 ---
 
@@ -99,6 +95,8 @@ docker build -f Dockerfile.vps -t affine-custom:latest .
 # Verify image was created
 docker images affine-custom
 ```
+
+**Note:** `Dockerfile.vps` now runs Prisma client generation during the image build and copies the generated Prisma runtime files into the final image.
 
 ---
 
@@ -144,7 +142,7 @@ docker compose ps
 ## Estimated Build Times (Native x86_64)
 
 - **Rust compilation**: 5-10 minutes
-- **Web/Admin/Mobile**: 5-7 minutes
+- **Web/Admin**: 5-7 minutes
 - **Backend server**: 2-3 minutes
 - **Docker image**: 2-3 minutes
 - **Total**: ~15-25 minutes
@@ -175,10 +173,9 @@ yarn install
 
 **If Docker build fails:**
 ```bash
-# Ensure all dist folders exist
+# Ensure all required dist folders exist
 ls -la packages/frontend/apps/web/dist
 ls -la packages/frontend/admin/dist
-ls -la packages/frontend/apps/mobile/dist
 ls -la packages/backend/server/dist
 
 # If any are missing, rebuild them with yarn affine build
@@ -207,14 +204,12 @@ cp packages/backend/native/server-native.x64.node packages/backend/native/server
 cp packages/backend/native/server-native.x64.node packages/backend/native/server-native.armv7.node && \
 yarn affine build -p web --deps --wait-deps && \
 yarn affine build -p admin --deps --wait-deps && \
-mkdir -p packages/frontend/apps/mobile/dist && touch packages/frontend/apps/mobile/dist/.gitkeep && \
 yarn affine build -p server --deps --wait-deps && \
 docker build -f Dockerfile.vps -t affine-custom:latest . && \
 echo "✅ Build complete! Update docker-compose.yml and run: docker compose up -d"
 ```
 
 **What this does:**
-- Skips mobile build (has blocksuite dependency issues and not needed for web)
-- Creates empty mobile/dist folder to satisfy Docker COPY command
-- Builds only web, admin, and server (the essentials)
-
+- Builds only web, admin, and server
+- Skips mobile entirely
+- Lets the Docker build generate and package Prisma runtime files for the final image
