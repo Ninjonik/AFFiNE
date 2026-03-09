@@ -1,26 +1,38 @@
-# Custom Dockerfile for VPS build
-FROM node:22-bookworm-slim
+# syntax=docker/dockerfile:1.7
 
+# Identical to .github/deployment/node/Dockerfile but works for VPS local builds
+FROM node:22-bookworm-slim AS assets
 WORKDIR /app
 
-# Copy built server package contents directly into /app (matches official Dockerfile structure)
 COPY ./packages/backend/server /app
 COPY ./packages/frontend/apps/web/dist /app/static
 COPY ./packages/frontend/admin/dist /app/static/admin
 COPY ./packages/frontend/apps/mobile/dist /app/static/mobile
 
-# Copy workspace node_modules (contains prisma, cli and all deps needed for migration)
-COPY ./node_modules /app/node_modules
-
-# Install runtime system dependencies
+ARG TARGETARCH
+ARG TARGETVARIANT
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openssl libjemalloc2 && \
-    rm -rf /var/lib/apt/lists/*
+  apt-get install -y --no-install-recommends openssl ca-certificates && \
+  rm -rf /var/lib/apt/lists/*
 
-# Make sure prisma and other bin tools are found
-ENV PATH="/app/node_modules/.bin:${PATH}"
+RUN AFFINE_DOCKER_CLEAN=1 TARGETARCH="${TARGETARCH}" TARGETVARIANT="${TARGETVARIANT}" node ./scripts/docker-clean.mjs
 
-# Enable jemalloc
+FROM node:22-bookworm-slim
+WORKDIR /app
+
+COPY --from=assets /app /app
+
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends openssl libjemalloc2 && \
+  rm -rf /var/lib/apt/lists/*
+
+# Ensure prisma CLI is available for migrations
+# If node_modules doesn't have prisma, install it
+RUN if [ ! -f ./node_modules/.bin/prisma ]; then \
+      npm install --no-save prisma@6.8.2 @prisma/client@6.8.2 && \
+      npx prisma generate; \
+    fi
+
 ENV LD_PRELOAD=libjemalloc.so.2
 
 EXPOSE 3010
