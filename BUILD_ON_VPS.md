@@ -209,7 +209,7 @@ yarn affine build -p web --deps --wait-deps && \
 yarn affine build -p admin --deps --wait-deps && \
 mkdir -p packages/frontend/apps/mobile/dist && touch packages/frontend/apps/mobile/dist/.gitkeep && \
 yarn affine build -p server --deps --wait-deps && \
-docker build -f .github/deployment/node/Dockerfile -t affine-custom:latest . && \
+docker build -f Dockerfile.vps -t affine-custom:latest . && \
 echo "✅ Build complete! Update docker-compose.yml and run: docker compose up -d"
 ```
 
