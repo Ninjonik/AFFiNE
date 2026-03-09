@@ -1,35 +1,28 @@
 # Custom Dockerfile for VPS build
-# This works with builds done on the VPS using yarn workspace
 FROM node:22-bookworm-slim
 
 WORKDIR /app
 
-# Copy the entire built server directory with all dependencies
-COPY ./packages/backend/server /app/server
-COPY ./packages/frontend/apps/web/dist /app/server/static
-COPY ./packages/frontend/admin/dist /app/server/static/admin
-COPY ./packages/frontend/apps/mobile/dist /app/server/static/mobile
+# Copy built server package contents directly into /app (matches official Dockerfile structure)
+COPY ./packages/backend/server /app
+COPY ./packages/frontend/apps/web/dist /app/static
+COPY ./packages/frontend/admin/dist /app/static/admin
+COPY ./packages/frontend/apps/mobile/dist /app/static/mobile
 
-# Copy workspace node_modules (contains prisma and other deps needed for migration)
+# Copy workspace node_modules (contains prisma, cli and all deps needed for migration)
 COPY ./node_modules /app/node_modules
-COPY ./package.json /app/package.json
-COPY ./yarn.lock /app/yarn.lock
 
-# Install runtime dependencies
+# Install runtime system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends openssl libjemalloc2 && \
     rm -rf /var/lib/apt/lists/*
 
-# Set working directory to server
-WORKDIR /app/server
+# Make sure prisma and other bin tools are found
+ENV PATH="/app/node_modules/.bin:${PATH}"
 
 # Enable jemalloc
 ENV LD_PRELOAD=libjemalloc.so.2
 
-# Make prisma available
-ENV PATH="/app/node_modules/.bin:${PATH}"
-
 EXPOSE 3010
 
 CMD ["node", "./dist/main.js"]
-
