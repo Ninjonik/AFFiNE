@@ -40,9 +40,15 @@ function prepare() {
 
 function runPredeployScript() {
   console.log('running predeploy script.');
-  execSync('yarn predeploy', {
+  // Use npx to find prisma and cli binaries - works in Docker without yarn workspace
+  execSync('npx prisma migrate deploy', {
     encoding: 'utf-8',
     env: process.env,
+    stdio: 'inherit',
+  });
+  execSync('node ./dist/main.js', {
+    encoding: 'utf-8',
+    env: { ...process.env, SERVER_FLAVOR: 'script' },
     stdio: 'inherit',
   });
 }
@@ -54,7 +60,7 @@ function fixFailedMigrations() {
   ];
   for (const migration of maybeFailedMigrations) {
     try {
-      execSync(`yarn prisma migrate resolve --rolled-back ${migration}`, {
+      execSync(`npx prisma migrate resolve --rolled-back ${migration}`, {
         encoding: 'utf-8',
         env: process.env,
         stdio: 'pipe',
