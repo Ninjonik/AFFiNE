@@ -26,6 +26,7 @@ RUN node -e " \
   delete pkg.scripts; \
   require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));" && \
   npm install --production --ignore-scripts --legacy-peer-deps && \
+  npm install --no-save --ignore-scripts aws4 && \
   npx prisma generate
 
 RUN AFFINE_DOCKER_CLEAN=1 TARGETARCH="${TARGETARCH}" TARGETVARIANT="${TARGETVARIANT}" node ./scripts/docker-clean.mjs

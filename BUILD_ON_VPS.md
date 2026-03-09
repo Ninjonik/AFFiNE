@@ -93,8 +93,8 @@ yarn affine build -p server --deps --wait-deps
 ## Step 4: Build Docker Image
 
 ```bash
-# Build the image using the official Dockerfile
-docker build -f .github/deployment/node/Dockerfile -t affine-custom:latest .
+# Build the image using the VPS Dockerfile
+docker build -f Dockerfile.vps -t affine-custom:latest .
 
 # Verify image was created
 docker images affine-custom
