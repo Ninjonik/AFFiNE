@@ -1,89 +1,66 @@
+# Multi-stage Dockerfile for amd64 that compiles everything inside the container
 # syntax=docker/dockerfile:1.7
 
-# Extract only package.json files from workspace packages.
-# We need these to resolve npm dependencies of workspace:* packages.
-FROM node:22-bookworm-slim AS workspace-deps
-WORKDIR /ws
-COPY ./packages ./packages
-RUN find /ws/packages -type f ! -name 'package.json' -delete 2>/dev/null; \
-    find /ws/packages -type d -empty -delete 2>/dev/null; true
-
-FROM node:22-bookworm-slim AS assets
+FROM node:22-bookworm AS builder
 WORKDIR /app
 
-COPY ./packages/backend/server /app
-COPY ./packages/frontend/apps/web/dist /app/static
-COPY ./packages/frontend/admin/dist /app/static/admin
-COPY ./packages/frontend/apps/mobile/dist /app/static/mobile
-
-# Bring in just the workspace package.json files
-COPY --from=workspace-deps /ws/packages /tmp/packages
-
-ARG TARGETARCH
-ARG TARGETVARIANT
+# Install Rust and build tools for native module compilation
 RUN apt-get update && \
-  apt-get install -y --no-install-recommends openssl ca-certificates && \
-  rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends \
+    curl \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install production dependencies.
-# Workspace packages (workspace:*) don't exist on npm, but the bundler inlines
-# their code into dist/main.js while leaving their own npm deps as external
-# imports.  We scan every workspace package the server depends on, collect
-# their non-workspace npm dependencies, merge them into the server's
-# package.json, and then run a single npm install.
-RUN node -e " \
-  const fs = require('fs'); \
-  const path = require('path'); \
-  const pkg = JSON.parse(fs.readFileSync('package.json','utf8')); \
-  const deps = pkg.dependencies || {}; \
-  \
-  /* Build a map: workspace package name -> package.json path */ \
-  const wsMap = {}; \
-  const walk = (dir) => { \
-    for (const entry of fs.readdirSync(dir, {withFileTypes:true})) { \
-      if (entry.name === 'node_modules') continue; \
-      const full = path.join(dir, entry.name); \
-      if (entry.isDirectory()) walk(full); \
-      else if (entry.name === 'package.json') { \
-        try { const p = JSON.parse(fs.readFileSync(full,'utf8')); if (p.name) wsMap[p.name] = full; } catch {} \
-      } \
-    } \
-  }; \
-  walk('/tmp/packages'); \
-  \
-  /* For every workspace: dep, pull in its npm (non-workspace) dependencies */ \
-  for (const [name, ver] of Object.entries(deps)) { \
-    if (!ver.startsWith('workspace:')) continue; \
-    const pkgPath = wsMap[name]; \
-    if (pkgPath) { \
-      const wsPkg = JSON.parse(fs.readFileSync(pkgPath,'utf8')); \
-      for (const [d,v] of Object.entries(wsPkg.dependencies || {})) { \
-        if (!v.startsWith('workspace:') && !deps[d]) deps[d] = v; \
-      } \
-    } \
-    delete deps[name]; \
-  } \
-  \
-  delete pkg.devDependencies; \
-  delete pkg.scripts; \
-  fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));" && \
-  rm -rf /tmp/packages && \
-  npm install --production --ignore-scripts --legacy-peer-deps && \
-  npx prisma generate
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.93.1
+ENV PATH="/root/.cargo/bin:${PATH}"
 
-RUN AFFINE_DOCKER_CLEAN=1 TARGETARCH="${TARGETARCH}" TARGETVARIANT="${TARGETVARIANT}" node ./scripts/docker-clean.mjs
+# Copy the entire workspace
+COPY . .
 
+# Install dependencies
+RUN corepack enable && yarn install
+
+# Build native modules for amd64
+RUN cargo build --release --target x86_64-unknown-linux-gnu && \
+    cp target/x86_64-unknown-linux-gnu/release/libaffine_server_native.so packages/backend/native/server-native.x64.node && \
+    cp packages/backend/native/server-native.x64.node packages/backend/native/server-native.arm64.node && \
+    cp packages/backend/native/server-native.x64.node packages/backend/native/server-native.armv7.node
+
+# Build frontends using the CLI tool
+RUN yarn affine build -p web --deps --wait-deps && \
+    yarn affine build -p admin --deps --wait-deps && \
+    yarn affine build -p mobile --deps --wait-deps
+
+# Build backend server
+RUN yarn affine build -p server --deps --wait-deps
+
+# Final stage - runtime image
 FROM node:22-bookworm-slim
 WORKDIR /app
 
-COPY --from=assets /app /app
+# Copy built artifacts
+COPY --from=builder /app/packages/backend/server /app
+COPY --from=builder /app/packages/frontend/apps/web/dist /app/static
+COPY --from=builder /app/packages/frontend/admin/dist /app/static/admin
+COPY --from=builder /app/packages/frontend/apps/mobile/dist /app/static/mobile
 
+# Install runtime dependencies
 RUN apt-get update && \
-  apt-get install -y --no-install-recommends openssl libjemalloc2 && \
-  rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends openssl libjemalloc2 && \
+    rm -rf /var/lib/apt/lists/*
 
+# Run docker-clean script
+ARG TARGETARCH=amd64
+RUN AFFINE_DOCKER_CLEAN=1 TARGETARCH="${TARGETARCH}" node ./scripts/docker-clean.mjs
+
+# Enable jemalloc
 ENV LD_PRELOAD=libjemalloc.so.2
 
 EXPOSE 3010
 
 CMD ["node", "./dist/main.js"]
+
